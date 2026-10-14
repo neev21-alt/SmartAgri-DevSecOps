@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SmartAgri - IoT Agriculture Monitoring</title>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: Arial, sans-serif;
+      background: #f4f7f5;
+      color: #1f2937;
+    }
+    .container { max-width: 1100px; margin: auto; padding: 28px 18px; }
+    header {
+      background: #173f2a;
+      color: white;
+      padding: 28px;
+      border-radius: 16px;
+      margin-bottom: 20px;
+    }
+    header h1 { margin: 0 0 8px; font-size: 30px; }
+    header p { margin: 0; opacity: .9; }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 16px;
+      margin-bottom: 20px;
+    }
+    .card {
+      background: white;
+      border-radius: 14px;
+      padding: 20px;
+      box-shadow: 0 3px 12px rgba(0,0,0,.07);
+    }
+    .label { color: #6b7280; font-size: 14px; }
+    .value { font-size: 34px; font-weight: 700; margin-top: 8px; }
+    .unit { font-size: 16px; color: #6b7280; }
+    .status {
+      display: inline-block;
+      padding: 9px 14px;
+      border-radius: 20px;
+      font-weight: 700;
+      margin-top: 10px;
+    }
+    .dry { background: #fee2e2; color: #991b1b; }
+    .normal { background: #dcfce7; color: #166534; }
+    .pump-on { background: #dbeafe; color: #1e40af; }
+    .pump-off { background: #e5e7eb; color: #374151; }
+    .controls { display: flex; flex-wrap: wrap; gap: 10px; }
+    button {
+      border: 0; padding: 11px 16px; border-radius: 9px;
+      cursor: pointer; font-weight: 700; background: #173f2a; color: white;
+    }
+    button.secondary { background: #64748b; }
+    button.warning { background: #9a3412; }
+    .wide { grid-column: 1 / -1; }
+    .row { display: flex; justify-content: space-between; align-items: center; gap: 15px; }
+    table { width: 100%; border-collapse: collapse; margin-top: 12px; }
+    th, td { padding: 10px; border-bottom: 1px solid #e5e7eb; text-align: left; }
+    th { color: #475569; font-size: 13px; }
+    .small { font-size: 13px; color: #64748b; }
+    @media (max-width: 800px) { .grid { grid-template-columns: 1fr; } }
+  </style>
+</head>
+<body>
+<div class="container">
+  <header>
+    <h1>SmartAgri</h1>
+    <p>Software-Based IoT Smart Agriculture Monitoring System</p>
+  </header>
+
+  <div class="grid">
+    <div class="card">
+      <div class="label">Soil Moisture</div>
+      <div class="value"><span id="moisture">35</span><span class="unit"> %</span></div>
+      <span id="soilStatus" class="status dry">Dry Soil</span>
+    </div>
+    <div class="card">
+      <div class="label">Temperature</div>
+      <div class="value"><span id="temperature">29</span><span class="unit"> °C</span></div>
+    </div>
+    <div class="card">
+      <div class="label">Humidity</div>
+      <div class="value"><span id="humidity">64</span><span class="unit"> %</span></div>
+    </div>
+
+    <div class="card">
+      <div class="row">
+        <div>
+          <div class="label">Irrigation Status</div>
+          <div id="pumpStatus" class="status pump-on">Pump ON</div>
+        </div>
+        <div class="small">Threshold: <b>40%</b></div>
+      </div>
+      <p id="decision">Soil moisture is below the threshold. Irrigation is required.</p>
+    </div>
+
+    <div class="card wide">
+      <div class="row">
+        <div>
+          <h2 style="margin:0 0 5px">Simulation Controls</h2>
+          <div class="small">Change simulated sensor conditions to demonstrate the working model.</div>
+        </div>
+      </div>
+      <div class="controls" style="margin-top:15px">
+        <button onclick="app.simulateDry()">Simulate Dry Soil</button>
+        <button onclick="app.simulateNormal()">Simulate Normal Soil</button>
+        <button class="secondary" onclick="app.randomize()">Random Sensor Data</button>
+        <button class="warning" onclick="app.toggleManual()">Toggle Manual Pump</button>
+      </div>
+    </div>
+
+    <div class="card wide">
+      <h2 style="margin-top:0">Sensor History</h2>
+      <table>
+        <thead>
+          <tr><th>Time</th><th>Moisture</th><th>Temperature</th><th>Humidity</th><th>Pump</th></tr>
+        </thead>
+        <tbody id="history"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<script>
+class Sensor {
+  constructor(name, value = 0) {
+    this.name = name;
+    this.value = value;
+  }
+  read() { return this.value; }
+  setValue(value) { this.value = value; }
+}
+
+class SoilMoistureSensor extends Sensor {
+  constructor(value = 35) { super("Soil Moisture", value); }
+}
+class TemperatureSensor extends Sensor {
+  constructor(value = 29) { super("Temperature", value); }
+}
+class HumiditySensor extends Sensor {
+  constructor(value = 64) { super("Humidity", value); }
+}
+
+class WaterPump {
+  constructor() {
+    this.isOn = false;
+    this.manualMode = false;
+  }
+  turnOn() { this.isOn = true; }
+  turnOff() { this.isOn = false; }
+  toggleManual() {
+    this.manualMode = true;
+    this.isOn = !this.isOn;
+  }
+  automatic() { this.manualMode = false; }
+}
+
+class FarmController {
+  constructor(soil, temperature, humidity, pump, threshold = 40) {
+    this.soil = soil;
+    this.temperature = temperature;
+    this.humidity = humidity;
+    this.pump = pump;
+    this.threshold = threshold;
+  }
+  evaluate() {
+    if (!this.pump.manualMode) {
+      if (this.soil.read() < this.threshold) this.pump.turnOn();
+      else this.pump.turnOff();
+    }
+  }
+  getStatus() {
+    return this.soil.read() < this.threshold ? "Dry Soil" : "Normal Soil";
+  }
+  getDecision() {
+    return this.soil.read() < this.threshold
+      ? "Soil moisture is below the threshold. Irrigation is required."
+      : "Soil moisture is sufficient. Irrigation is not required.";
+  }
+}
+
+class Dashboard {
+  constructor(controller) {
+    this.controller = controller;
+    this.history = [];
+  }
+  render() {
+    const c = this.controller;
+    c.evaluate();
+
+    document.getElementById("moisture").textContent = c.soil.read();
+    document.getElementById("temperature").textContent = c.temperature.read();
+    document.getElementById("humidity").textContent = c.humidity.read();
+
+    const soilStatus = document.getElementById("soilStatus");
+    soilStatus.textContent = c.getStatus();
+    soilStatus.className = "status " + (c.getStatus() === "Dry Soil" ? "dry" : "normal");
+
+    const pump = document.getElementById("pumpStatus");
+    pump.textContent = c.pump.isOn ? "Pump ON" : "Pump OFF";
+    pump.className = "status " + (c.pump.isOn ? "pump-on" : "pump-off");
+
+    document.getElementById("decision").textContent =
+      c.pump.manualMode ? "Manual pump control is active." : c.getDecision();
+
+    this.addHistory();
+  }
+  addHistory() {
+    this.history.unshift({
+      time: new Date().toLocaleTimeString(),
+      moisture: this.controller.soil.read(),
+      temperature: this.controller.temperature.read(),
+      humidity: this.controller.humidity.read(),
+      pump: this.controller.pump.isOn ? "ON" : "OFF"
+    });
+    this.history = this.history.slice(0, 8);
+
+    document.getElementById("history").innerHTML = this.history.map(r =>
+      `<tr><td>${r.time}</td><td>${r.moisture}%</td><td>${r.temperature}°C</td><td>${r.humidity}%</td><td>${r.pump}</td></tr>`
+    ).join("");
+  }
+}
+
+const soil = new SoilMoistureSensor();
+const temp = new TemperatureSensor();
+const humidity = new HumiditySensor();
+const pump = new WaterPump();
+const controller = new FarmController(soil, temp, humidity, pump, 40);
+const dashboard = new Dashboard(controller);
+
+const app = {
+  update(m, t, h) {
+    soil.setValue(m);
+    temp.setValue(t);
+    humidity.setValue(h);
+    pump.automatic();
+    dashboard.render();
+  },
+  simulateDry() { this.update(25, 30, 58); },
+  simulateNormal() { this.update(70, 28, 68); },
+  randomize() {
+    this.update(
+      Math.floor(Math.random() * 81) + 10,
+      Math.floor(Math.random() * 16) + 20,
+      Math.floor(Math.random() * 41) + 40
+    );
+  },
+  toggleManual() {
+    pump.toggleManual();
+    dashboard.render();
+  }
+};
+
+dashboard.render();
+</script>
+</body>
+</html>
