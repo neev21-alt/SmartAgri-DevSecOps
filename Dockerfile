@@ -1,7 +1,9 @@
+
 FROM nginx:alpine
 
-LABEL maintainer="Neev Savla"
 LABEL description="SmartAgri agriculture monitoring website"
+
+RUN apk upgrade --no-cache
 
 COPY index.html /usr/share/nginx/html/index.html
 
